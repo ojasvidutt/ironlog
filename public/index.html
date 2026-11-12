@@ -941,19 +941,28 @@
       
       try {
         // Create workout
-        const workoutResult = await apiCall('workouts', 'POST', { date, notes });
-        const workoutId = workoutResult[0]?.id;
+        const { data: workoutData, error: workoutError } = await supabase
+          .from('workouts')
+          .insert([{ date, notes, user_id: currentUser.id }])
+          .select();
+        
+        if (workoutError) throw workoutError;
+        const workoutId = workoutData[0]?.id;
         
         // Add exercises
         for (const we of currentWorkout) {
-          await apiCall('workout_exercises', 'POST', {
-            workout_id: workoutId,
-            exercise_id: we.exerciseId,
-            sets: we.sets,
-            reps: we.reps,
-            rest_seconds: we.rest,
-            notes: we.notes
-          });
+          const { error: weError } = await supabase
+            .from('workout_exercises')
+            .insert([{
+              workout_id: workoutId,
+              exercise_id: we.exerciseId,
+              sets: we.sets,
+              reps: we.reps,
+              rest_seconds: we.rest,
+              notes: we.notes
+            }]);
+          
+          if (weError) throw weError;
         }
         
         alert('Workout saved!');
@@ -968,7 +977,15 @@
     // Bodyweight
     async function loadBodyweightLogs() {
       try {
-        bodyweightLogs = await apiCall('bodyweight_logs?select=*&order=date.desc&limit=30');
+        const { data, error } = await supabase
+          .from('bodyweight_logs')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('date', { ascending: false })
+          .limit(30);
+        
+        if (error) throw error;
+        bodyweightLogs = data || [];
         renderBodyweightLogs();
         updateCurrentWeight();
       } catch (e) {
@@ -1043,7 +1060,13 @@
       if (!confirm('Delete this weight log?')) return;
       
       try {
-        await apiCall(`bodyweight_logs?id=eq.${id}`, 'DELETE');
+        const { error } = await supabase
+          .from('bodyweight_logs')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', currentUser.id);
+        
+        if (error) throw error;
         await loadBodyweightLogs();
       } catch (e) {
         alert('Failed to delete: ' + e.message);
@@ -1053,18 +1076,29 @@
     // History
     async function loadHistory() {
       try {
-        const workouts = await apiCall('workouts?select=*&order=date.desc');
-        const allExercises = await apiCall('exercises?select=*');
+        const { data: workouts, error: workoutError } = await supabase
+          .from('workouts')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('date', { ascending: false });
         
-        for (const workout of workouts) {
-          const workoutExercises = await apiCall(`workout_exercises?workout_id=eq.${workout.id}&select=*`);
-          workout.exercises = workoutExercises.map(we => ({
+        if (workoutError) throw workoutError;
+
+        for (const workout of (workouts || [])) {
+          const { data: workoutExercises, error: weError } = await supabase
+            .from('workout_exercises')
+            .select('*')
+            .eq('workout_id', workout.id);
+          
+          if (weError) throw weError;
+
+          workout.exercises = (workoutExercises || []).map(we => ({
             ...we,
-            exerciseName: allExercises.find(ex => ex.id === we.exercise_id)?.name || 'Unknown'
+            exerciseName: exercises.find(ex => ex.id === we.exercise_id)?.name || 'Unknown'
           }));
         }
         
-        renderHistory(workouts);
+        renderHistory(workouts || []);
       } catch (e) {
         console.error('Failed to load history:', e);
       }
@@ -1107,7 +1141,22 @@
       if (!confirm('Delete this workout? This cannot be undone.')) return;
       
       try {
-        await apiCall(`workouts?id=eq.${id}`, 'DELETE');
+        // Delete workout_exercises first (cascade)
+        const { error: weError } = await supabase
+          .from('workout_exercises')
+          .delete()
+          .eq('workout_id', id);
+        
+        if (weError) throw weError;
+
+        // Then delete workout
+        const { error } = await supabase
+          .from('workouts')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', currentUser.id);
+        
+        if (error) throw error;
         await loadHistory();
       } catch (e) {
         alert('Failed to delete workout: ' + e.message);
