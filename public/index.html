@@ -173,6 +173,16 @@
       flex: 1;
     }
 
+    select {
+      min-width: 0;
+      padding-right: 36px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23ffb000' stroke-width='2'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 12px 8px;
+    }
+
     textarea {
       width: 100%;
       min-height: 60px;
@@ -413,13 +423,49 @@
 
     /* Responsive */
     @media (max-width: 480px) {
+      .main {
+        padding: 16px 10px;
+      }
+
+      .header {
+        padding: 18px 10px;
+      }
+
       .nav-tab {
-        padding: 10px 4px;
-        font-size: 0.6rem;
+        padding: 10px 2px;
+        font-size: 0.58rem;
+        letter-spacing: 0.04em;
       }
 
       .form-row {
         flex-wrap: wrap;
+      }
+
+      .form-row > input,
+      .form-row > select,
+      .form-row > textarea {
+        min-width: 0;
+        flex: 1 1 100%;
+      }
+
+      #workoutExerciseSelect {
+        flex: 1 1 calc(100% - 48px);
+      }
+
+      #workoutExerciseSelect + .btn {
+        flex: 0 0 40px;
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+
+      .set-row {
+        align-items: center;
+      }
+
+      .set-row .set-weight,
+      .set-row .set-reps {
+        flex: 1 1 0;
+        width: auto;
       }
 
       input[type="number"] {
@@ -429,6 +475,21 @@
       .workout-exercise-stats {
         flex-wrap: wrap;
         gap: 8px;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .card {
+        padding: 12px;
+      }
+
+      .nav-tab {
+        font-size: 0.5rem;
+      }
+
+      .btn {
+        padding: 8px 10px;
+        font-size: 0.7rem;
       }
     }
   </style>
@@ -589,7 +650,7 @@
     <section class="section" id="bodyweight">
       <div class="bodyweight-current" id="currentWeight">
         <div class="bodyweight-value">--</div>
-        <div class="bodyweight-unit">lbs</div>
+        <div class="bodyweight-unit">kg</div>
         <div class="bodyweight-trend" id="weightTrend"></div>
       </div>
       <div class="card">
