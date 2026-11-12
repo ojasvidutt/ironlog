@@ -1,65 +1,79 @@
--- IRON LOG - RLS Setup for Public/Unauthenticated Access
--- This allows public access while maintaining data isolation via session/device ID
+-- IRON LOG authenticated RLS setup
+-- Run this entire script once in Supabase SQL Editor.
 
--- 1. Add session_id column to all tables (instead of user_id for unauthenticated)
-ALTER TABLE exercises ADD COLUMN session_id UUID DEFAULT gen_random_uuid();
-ALTER TABLE workouts ADD COLUMN session_id UUID DEFAULT gen_random_uuid();
-ALTER TABLE bodyweight_logs ADD COLUMN session_id UUID DEFAULT gen_random_uuid();
+ALTER TABLE exercises
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
 
--- 2. Enable RLS on all tables
+ALTER TABLE workouts
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+
+ALTER TABLE bodyweight_logs
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+
 ALTER TABLE exercises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workout_exercises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bodyweight_logs ENABLE ROW LEVEL SECURITY;
 
--- 3. RLS Policies for exercises (based on session_id)
-CREATE POLICY "Allow public read on exercises" ON exercises
-  FOR SELECT USING (true);
+-- Remove policies created by earlier setup attempts.
+DROP POLICY IF EXISTS "Allow public read on exercises" ON exercises;
+DROP POLICY IF EXISTS "Allow insert on exercises" ON exercises;
+DROP POLICY IF EXISTS "Allow update on exercises" ON exercises;
+DROP POLICY IF EXISTS "Allow delete on exercises" ON exercises;
+DROP POLICY IF EXISTS "Users manage own exercises" ON exercises;
+DROP POLICY IF EXISTS "own exercises" ON exercises;
 
-CREATE POLICY "Allow insert on exercises" ON exercises
-  FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public read on workouts" ON workouts;
+DROP POLICY IF EXISTS "Allow insert on workouts" ON workouts;
+DROP POLICY IF EXISTS "Allow update on workouts" ON workouts;
+DROP POLICY IF EXISTS "Allow delete on workouts" ON workouts;
+DROP POLICY IF EXISTS "Users manage own workouts" ON workouts;
+DROP POLICY IF EXISTS "own workouts" ON workouts;
 
-CREATE POLICY "Allow update on exercises" ON exercises
-  FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow public read on workout_exercises" ON workout_exercises;
+DROP POLICY IF EXISTS "Allow insert on workout_exercises" ON workout_exercises;
+DROP POLICY IF EXISTS "Allow update on workout_exercises" ON workout_exercises;
+DROP POLICY IF EXISTS "Allow delete on workout_exercises" ON workout_exercises;
+DROP POLICY IF EXISTS "Users manage own workout details" ON workout_exercises;
+DROP POLICY IF EXISTS "own workout exercises" ON workout_exercises;
 
-CREATE POLICY "Allow delete on exercises" ON exercises
-  FOR DELETE USING (true);
+DROP POLICY IF EXISTS "Allow public read on bodyweight_logs" ON bodyweight_logs;
+DROP POLICY IF EXISTS "Allow insert on bodyweight_logs" ON bodyweight_logs;
+DROP POLICY IF EXISTS "Allow update on bodyweight_logs" ON bodyweight_logs;
+DROP POLICY IF EXISTS "Allow delete on bodyweight_logs" ON bodyweight_logs;
+DROP POLICY IF EXISTS "Users manage own bodyweight" ON bodyweight_logs;
+DROP POLICY IF EXISTS "own bodyweight" ON bodyweight_logs;
 
--- 4. RLS Policies for workouts
-CREATE POLICY "Allow public read on workouts" ON workouts
-  FOR SELECT USING (true);
+CREATE POLICY "authenticated users own exercises"
+  ON exercises FOR ALL TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
 
-CREATE POLICY "Allow insert on workouts" ON workouts
-  FOR INSERT WITH CHECK (true);
+CREATE POLICY "authenticated users own workouts"
+  ON workouts FOR ALL TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
 
-CREATE POLICY "Allow update on workouts" ON workouts
-  FOR UPDATE USING (true);
+CREATE POLICY "authenticated users own bodyweight"
+  ON bodyweight_logs FOR ALL TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
 
-CREATE POLICY "Allow delete on workouts" ON workouts
-  FOR DELETE USING (true);
-
--- 5. RLS Policies for workout_exercises
-CREATE POLICY "Allow public read on workout_exercises" ON workout_exercises
-  FOR SELECT USING (true);
-
-CREATE POLICY "Allow insert on workout_exercises" ON workout_exercises
-  FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow update on workout_exercises" ON workout_exercises
-  FOR UPDATE USING (true);
-
-CREATE POLICY "Allow delete on workout_exercises" ON workout_exercises
-  FOR DELETE USING (true);
-
--- 6. RLS Policies for bodyweight_logs
-CREATE POLICY "Allow public read on bodyweight_logs" ON bodyweight_logs
-  FOR SELECT USING (true);
-
-CREATE POLICY "Allow insert on bodyweight_logs" ON bodyweight_logs
-  FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow update on bodyweight_logs" ON bodyweight_logs
-  FOR UPDATE USING (true);
-
-CREATE POLICY "Allow delete on bodyweight_logs" ON bodyweight_logs
-  FOR DELETE USING (true);
+CREATE POLICY "authenticated users own workout exercises"
+  ON workout_exercises FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM workouts
+      WHERE workouts.id = workout_exercises.workout_id
+        AND workouts.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM workouts
+      WHERE workouts.id = workout_exercises.workout_id
+        AND workouts.user_id = auth.uid()
+    )
+  );
