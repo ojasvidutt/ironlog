@@ -13,10 +13,12 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Extract the Supabase endpoint from the URL
-  // /api/proxy/exercises -> exercises
-  const path = req.url.split('/proxy/')[1]?.split('?')[0] || '';
-  const supabaseUrl = `${SUPABASE_URL}/rest/v1/${path}`;
+  // Extract endpoint from Vercel's catch-all route params
+  // req.query.path is an array like ['exercises'] or ['bodyweight_logs']
+  const { path: routePath, ...supabaseQuery } = req.query;
+  const endpoint = Array.isArray(routePath) ? routePath.join('/') : (routePath || '');
+  
+  const supabaseUrl = `${SUPABASE_URL}/rest/v1/${endpoint}`;
 
   const options = {
     method: req.method,
@@ -32,8 +34,8 @@ export default async function handler(req, res) {
     options.body = JSON.stringify(req.body);
   }
 
-  // Forward query params
-  const queryParams = new URLSearchParams(req.query).toString();
+  // Forward only Supabase query params (not 'path')
+  const queryParams = new URLSearchParams(supabaseQuery).toString();
   const finalUrl = queryParams ? `${supabaseUrl}?${queryParams}` : supabaseUrl;
 
   try {
