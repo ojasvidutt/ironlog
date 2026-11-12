@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IRON LOG // Workout Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="config.js"></script>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -537,8 +537,7 @@
 
   <script>
     // State
-    let supabaseUrl = '';
-    let supabaseKey = '';
+    // API calls go through /api/proxy - no credentials exposed on frontend
     let exercises = [];
     let currentWorkout = [];
     let bodyweightLogs = [];
@@ -552,15 +551,8 @@
 
     // Config
     function loadConfig() {
-      // Load from config.js
-      supabaseUrl = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
-      supabaseKey = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
-      
-      if (supabaseUrl && supabaseKey) {
-        loadData();
-      } else {
-        alert('Please configure config.js with your Supabase credentials');
-      }
+      // All API calls go through /api/proxy - credentials are server-side only
+      loadData();
     }
 
     // Navigation
@@ -578,10 +570,8 @@
 
     // API
     async function apiCall(endpoint, method = 'GET', body = null) {
-      // Use Vercel API proxy in production, direct call for local dev
-      const baseUrl = window.location.hostname === 'localhost' 
-        ? `${supabaseUrl}/rest/v1` 
-        : '/api/proxy';
+      // All requests go through /api/proxy - credentials are server-side only
+      const baseUrl = '/api/proxy';
       
       const options = {
         method,
