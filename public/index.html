@@ -6,6 +6,7 @@
   <title>IRON LOG // Workout Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/config.js"></script>
   <style>
     *, *::before, *::after {
@@ -433,10 +434,85 @@
   </style>
 </head>
 <body>
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal" style="display: flex;">
+    <div class="modal-content">
+      <h2>IRON LOG</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 24px;">Sign in or create account</p>
+      
+      <div id="authForm">
+        <div class="form-row">
+          <input type="email" id="authEmail" placeholder="Email" style="width: 100%;">
+        </div>
+        <div class="form-row">
+          <input type="password" id="authPassword" placeholder="Password" style="width: 100%;">
+        </div>
+        <div class="form-row" style="gap: 8px;">
+          <button class="btn btn-primary" onclick="handleLogin()" style="flex: 1;">Sign In</button>
+          <button class="btn btn-primary" onclick="handleSignup()" style="flex: 1;">Sign Up</button>
+        </div>
+        <div id="authError" style="color: var(--danger); font-size: 0.8rem; margin-top: 8px; display: none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 32px;
+      max-width: 300px;
+      width: 100%;
+    }
+
+    .modal-content h2 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+    }
+
+    .user-badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      font-size: 0.7rem;
+      background: var(--border);
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logout-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 0.7rem;
+      padding: 0;
+    }
+  </style>
   
 
   <!-- Header -->
-  <header class="header">
+  <header class="header" style="position: relative;">
+    <div id="userBadge" class="user-badge" style="display: none;">
+      <span id="userEmail"></span>
+      <button class="logout-btn" onclick="handleLogout()">logout</button>
+    </div>
     <h1>IRON LOG</h1>
     <p>// WORKOUT TRACKER</p>
   </header>
@@ -538,26 +614,102 @@
 
   <script>
     // State
-    // API calls go through /api/proxy - no credentials exposed on frontend
     let exercises = [];
     let currentWorkout = [];
     let bodyweightLogs = [];
+    let currentUser = null;
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      loadConfig();
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Check if user is already logged in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        currentUser = user;
+        showApp();
+      } else {
+        showAuthModal();
+      }
       setupNavigation();
-      document.getElementById('workoutDate').value = new Date().toISOString().split('T')[0];
     });
+
+    // Auth functions
+    async function handleLogin() {
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      
+      if (!email || !password) {
+        showAuthError('Please enter email and password');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        
+        currentUser = data.user;
+        showApp();
+      } catch (error) {
+        showAuthError(error.message);
+      }
+    }
+
+    async function handleSignup() {
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      
+      if (!email || !password) {
+        showAuthError('Please enter email and password');
+        return;
+      }
+
+      if (password.length < 6) {
+        showAuthError('Password must be at least 6 characters');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        
+        currentUser = data.user;
+        showApp();
+      } catch (error) {
+        showAuthError(error.message);
+      }
+    }
+
+    async function handleLogout() {
+      await supabase.auth.signOut();
+      currentUser = null;
+      showAuthModal();
+    }
+
+    function showAuthModal() {
+      document.getElementById('authModal').style.display = 'flex';
+      document.querySelector('.main').style.display = 'none';
+      document.getElementById('userBadge').style.display = 'none';
+    }
+
+    function showApp() {
+      document.getElementById('authModal').style.display = 'none';
+      document.querySelector('.main').style.display = 'block';
+      document.getElementById('userBadge').style.display = 'flex';
+      document.getElementById('userEmail').textContent = currentUser.email;
+      
+      // Load data after auth
+      loadData();
+      document.getElementById('workoutDate').value = new Date().toISOString().split('T')[0];
+    }
+
+    function showAuthError(message) {
+      const errorEl = document.getElementById('authError');
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
 
     // Config
     function loadConfig() {
-      // Load Supabase credentials from config.js
-      if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_KEY !== 'undefined') {
-        loadData();
-      } else {
-        alert('Failed to load Supabase credentials');
-      }
+      // Supabase client already initialized in config.js
     }
 
     // Navigation
@@ -573,33 +725,58 @@
       });
     }
 
-    // API
-    async function apiCall(endpoint, method = 'GET', body = null) {
-      // Direct Supabase REST API calls
-      const baseUrl = `${SUPABASE_URL}/rest/v1`;
-      
-      const options = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
-          'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal'
+    // API - using Supabase client
+    async function apiCall(table, method = 'GET', body = null, filter = null) {
+      if (!currentUser) throw new Error('Not authenticated');
+
+      try {
+        let query = supabase.from(table);
+
+        if (method === 'GET') {
+          // Add user_id filter for all queries
+          query = query.eq('user_id', currentUser.id);
+          
+          if (filter) {
+            Object.entries(filter).forEach(([key, value]) => {
+              query = query.eq(key, value);
+            });
+          }
+          
+          const { data, error } = await query;
+          if (error) throw error;
+          return data;
         }
-      };
-      
-      if (body) {
-        options.body = JSON.stringify(body);
+
+        if (method === 'POST') {
+          body.user_id = currentUser.id;
+          const { data, error } = await query.insert([body]).select();
+          if (error) throw error;
+          return data;
+        }
+
+        if (method === 'DELETE' && filter) {
+          let deleteQuery = supabase.from(table).eq('user_id', currentUser.id);
+          Object.entries(filter).forEach(([key, value]) => {
+            deleteQuery = deleteQuery.eq(key, value);
+          });
+          const { error } = await deleteQuery.delete();
+          if (error) throw error;
+          return true;
+        }
+
+        if (method === 'PATCH' && filter && body) {
+          let updateQuery = supabase.from(table).eq('user_id', currentUser.id);
+          Object.entries(filter).forEach(([key, value]) => {
+            updateQuery = updateQuery.eq(key, value);
+          });
+          const { data, error } = await updateQuery.update(body).select();
+          if (error) throw error;
+          return data;
+        }
+      } catch (error) {
+        console.error(`API call failed for ${table}:`, error);
+        throw error;
       }
-      
-      const response = await fetch(`${baseUrl}/${endpoint}`, options);
-      
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      
-      const text = await response.text();
-      return text ? JSON.parse(text) : [];
     }
 
     // Load Data
@@ -614,7 +791,7 @@
     // Exercises
     async function loadExercises() {
       try {
-        exercises = await apiCall('exercises?select=*&order=name');
+        exercises = await apiCall('exercises');
         renderExercises();
         updateExerciseSelect();
       } catch (e) {
@@ -657,7 +834,7 @@
       if (!confirm('Delete this exercise?')) return;
       
       try {
-        await apiCall(`exercises?id=eq.${id}`, 'DELETE');
+        await apiCall('exercises', 'DELETE', null, { id });
         await loadExercises();
       } catch (e) {
         alert('Failed to delete exercise: ' + e.message);
