@@ -1,10 +1,10 @@
 // Vercel API route - proxies Supabase calls server-side
 // Your keys stay hidden in Vercel environment variables
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
 export default async function handler(req, res) {
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_KEY = process.env.SUPABASE_KEY;
+  
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Prefer');
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   // Extract the Supabase endpoint from the URL
   // /api/proxy/exercises -> exercises
-  const path = req.url.split('/proxy/')[1] || '';
+  const path = req.url.split('/proxy/')[1]?.split('?')[0] || '';
   const supabaseUrl = `${SUPABASE_URL}/rest/v1/${path}`;
 
   const options = {
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Prefer': req.method === 'POST' ? 'return=representation' : 'return=minimal'
     }
   };
