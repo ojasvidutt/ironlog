@@ -730,11 +730,12 @@
       if (!currentUser) throw new Error('Not authenticated');
 
       try {
-        let query = supabaseClient.from(table).select('*');
-
         if (method === 'GET') {
           // Add user_id filter for all queries
-          query = query.eq('user_id', currentUser.id);
+          let query = supabaseClient
+            .from(table)
+            .select('*')
+            .eq('user_id', currentUser.id);
           
           if (filter) {
             Object.entries(filter).forEach(([key, value]) => {
@@ -749,7 +750,10 @@
 
         if (method === 'POST') {
           body.user_id = currentUser.id;
-          const { data, error } = await query.insert([body]).select();
+          const { data, error } = await supabaseClient
+            .from(table)
+            .insert([body])
+            .select();
           if (error) throw error;
           return data;
         }
