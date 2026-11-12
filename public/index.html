@@ -6,6 +6,7 @@
   <title>IRON LOG // Workout Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <script src="/config.js"></script>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -551,8 +552,12 @@
 
     // Config
     function loadConfig() {
-      // All API calls go through /api/proxy - credentials are server-side only
-      loadData();
+      // Load Supabase credentials from config.js
+      if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_KEY !== 'undefined') {
+        loadData();
+      } else {
+        alert('Failed to load Supabase credentials');
+      }
     }
 
     // Navigation
@@ -570,13 +575,15 @@
 
     // API
     async function apiCall(endpoint, method = 'GET', body = null) {
-      // All requests go through /api/proxy - credentials are server-side only
-      const baseUrl = '/api/proxy';
+      // Direct Supabase REST API calls
+      const baseUrl = `${SUPABASE_URL}/rest/v1`;
       
       const options = {
         method,
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal'
         }
       };
       
