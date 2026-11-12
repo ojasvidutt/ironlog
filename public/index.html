@@ -622,7 +622,7 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
       // Check if user is already logged in
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabaseClient.auth.getUser();
       if (user) {
         currentUser = user;
         showApp();
@@ -643,7 +643,7 @@
       }
 
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
         
         currentUser = data.user;
@@ -668,7 +668,7 @@
       }
 
       try {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
         if (error) throw error;
         
         currentUser = data.user;
@@ -679,7 +679,7 @@
     }
 
     async function handleLogout() {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
       currentUser = null;
       showAuthModal();
     }
@@ -730,7 +730,7 @@
       if (!currentUser) throw new Error('Not authenticated');
 
       try {
-        let query = supabase.from(table);
+        let query = supabaseClient.from(table).select('*');
 
         if (method === 'GET') {
           // Add user_id filter for all queries
@@ -755,21 +755,21 @@
         }
 
         if (method === 'DELETE' && filter) {
-          let deleteQuery = supabase.from(table).eq('user_id', currentUser.id);
+          let deleteQuery = supabaseClient.from(table).delete().eq('user_id', currentUser.id);
           Object.entries(filter).forEach(([key, value]) => {
             deleteQuery = deleteQuery.eq(key, value);
           });
-          const { error } = await deleteQuery.delete();
+          const { error } = await deleteQuery;
           if (error) throw error;
           return true;
         }
 
         if (method === 'PATCH' && filter && body) {
-          let updateQuery = supabase.from(table).eq('user_id', currentUser.id);
+          let updateQuery = supabaseClient.from(table).update(body).eq('user_id', currentUser.id);
           Object.entries(filter).forEach(([key, value]) => {
             updateQuery = updateQuery.eq(key, value);
           });
-          const { data, error } = await updateQuery.update(body).select();
+          const { data, error } = await updateQuery.select();
           if (error) throw error;
           return data;
         }
@@ -941,7 +941,7 @@
       
       try {
         // Create workout
-        const { data: workoutData, error: workoutError } = await supabase
+        const { data: workoutData, error: workoutError } = await supabaseClient
           .from('workouts')
           .insert([{ date, notes, user_id: currentUser.id }])
           .select();
@@ -951,7 +951,7 @@
         
         // Add exercises
         for (const we of currentWorkout) {
-          const { error: weError } = await supabase
+          const { error: weError } = await supabaseClient
             .from('workout_exercises')
             .insert([{
               workout_id: workoutId,
@@ -977,7 +977,7 @@
     // Bodyweight
     async function loadBodyweightLogs() {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
           .from('bodyweight_logs')
           .select('*')
           .eq('user_id', currentUser.id)
@@ -1060,7 +1060,7 @@
       if (!confirm('Delete this weight log?')) return;
       
       try {
-        const { error } = await supabase
+        const { error } = await supabaseClient
           .from('bodyweight_logs')
           .delete()
           .eq('id', id)
@@ -1076,7 +1076,7 @@
     // History
     async function loadHistory() {
       try {
-        const { data: workouts, error: workoutError } = await supabase
+        const { data: workouts, error: workoutError } = await supabaseClient
           .from('workouts')
           .select('*')
           .eq('user_id', currentUser.id)
@@ -1085,7 +1085,7 @@
         if (workoutError) throw workoutError;
 
         for (const workout of (workouts || [])) {
-          const { data: workoutExercises, error: weError } = await supabase
+          const { data: workoutExercises, error: weError } = await supabaseClient
             .from('workout_exercises')
             .select('*')
             .eq('workout_id', workout.id);
@@ -1142,7 +1142,7 @@
       
       try {
         // Delete workout_exercises first (cascade)
-        const { error: weError } = await supabase
+        const { error: weError } = await supabaseClient
           .from('workout_exercises')
           .delete()
           .eq('workout_id', id);
@@ -1150,7 +1150,7 @@
         if (weError) throw weError;
 
         // Then delete workout
-        const { error } = await supabase
+        const { error } = await supabaseClient
           .from('workouts')
           .delete()
           .eq('id', id)
