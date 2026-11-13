@@ -151,12 +151,15 @@
 ### 4. History (History Tab)
 
 **Features**
+- Personal records list for every exercise with a saved set
+- Each record is based on the highest weight lifted, and shows the workout date, weight, and reps from that set
 - List past workouts by date (newest first)
 - Each entry shows: date, number of exercises, expandable details
 - Click to expand and see exercise details (sets, reps, rest)
 - Delete workout option
 
 **Data Flow**
+- Personal records are derived from saved workout exercise sets; no duplicate record data is stored
 - GET from `/workouts` with join to `/workout_exercises` and `/exercises`
 - DELETE from `/workouts` (cascades to workout_exercises)
 

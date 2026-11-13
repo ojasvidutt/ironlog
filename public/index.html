@@ -408,6 +408,43 @@
       color: var(--text-secondary);
     }
 
+    /* Personal Records */
+    .record-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 16px;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .record-item:last-child {
+      border-bottom: none;
+    }
+
+    .record-item:nth-child(even) {
+      background: var(--input-bg);
+    }
+
+    .record-name {
+      font-weight: 500;
+    }
+
+    .record-date {
+      grid-column: 1;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+    }
+
+    .record-value {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      color: var(--accent);
+      text-align: right;
+      white-space: nowrap;
+    }
+
     /* Empty State */
     .empty {
       text-align: center;
@@ -676,6 +713,12 @@
 
     <!-- History Section -->
     <section class="section" id="history">
+      <div class="card">
+        <div class="card-header">Personal Records // Highest Weight</div>
+        <div class="list" id="personalRecordsList">
+          <div class="empty">No records yet. Save a workout to start tracking.</div>
+        </div>
+      </div>
       <div id="historyList">
         <div class="empty">No workouts recorded yet.</div>
       </div>
@@ -863,8 +906,8 @@
 
     // Load Data
     async function loadData() {
+      await loadExercises();
       await Promise.all([
-        loadExercises(),
         loadBodyweightLogs(),
         loadHistory()
       ]);
@@ -1206,10 +1249,50 @@
           }));
         }
         
-        renderHistory(workouts || []);
+        const loadedWorkouts = workouts || [];
+        renderPersonalRecords(loadedWorkouts);
+        renderHistory(loadedWorkouts);
       } catch (e) {
         console.error('Failed to load history:', e);
       }
+    }
+
+    function renderPersonalRecords(workouts) {
+      const container = document.getElementById('personalRecordsList');
+      const records = new Map();
+
+      workouts.forEach(workout => {
+        workout.exercises.forEach(exercise => {
+          exercise.sets.forEach(set => {
+            const weight = Number(set.weight);
+            if (!Number.isFinite(weight)) return;
+
+            const currentRecord = records.get(exercise.exercise_id);
+            if (!currentRecord || weight > currentRecord.weight) {
+              records.set(exercise.exercise_id, {
+                name: exercise.exerciseName,
+                date: workout.date,
+                weight,
+                reps: set.reps
+              });
+            }
+          });
+        });
+      });
+
+      if (records.size === 0) {
+        container.innerHTML = '<div class="empty">No records yet. Save a workout to start tracking.</div>';
+        return;
+      }
+
+      const sortedRecords = [...records.values()].sort((a, b) => a.name.localeCompare(b.name));
+      container.innerHTML = sortedRecords.map(record => `
+        <div class="record-item">
+          <span class="record-name">${escapeHtml(record.name)}</span>
+          <span class="record-date">${record.date}</span>
+          <span class="record-value">${record.weight} lbs × ${record.reps}</span>
+        </div>
+      `).join('');
     }
 
     function renderHistory(workouts) {
