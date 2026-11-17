@@ -1395,7 +1395,7 @@
       const diff = current - avg;
       
       if (Math.abs(diff) > 0.1) {
-        trendEl.textContent = diff > 0 ? `↑ ${diff.toFixed(1)} lbs from 7-day avg` : `↓ ${Math.abs(diff).toFixed(1)} lbs from 7-day avg`;
+        trendEl.textContent = diff > 0 ? `↑ ${diff.toFixed(1)} kg from 7-day avg` : `↓ ${Math.abs(diff).toFixed(1)} kg from 7-day avg`;
         trendEl.className = 'bodyweight-trend ' + (diff > 0 ? 'up' : 'down');
       } else {
         trendEl.textContent = '';
@@ -1414,7 +1414,7 @@
         <div class="list-item">
           <span class="list-item-content">${log.date}</span>
           <div class="list-item-actions">
-            <span style="color: var(--text-primary); font-weight: 500;">${log.weight} lbs</span>
+            <span style="color: var(--text-primary); font-weight: 500;">${log.weight} kg</span>
             <button class="btn btn-danger btn-small" onclick="deleteBodyweight(${log.id})">×</button>
           </div>
         </div>
@@ -1526,7 +1526,7 @@
         <div class="record-item">
           <span class="record-name">${escapeHtml(record.name)}</span>
           <span class="record-date">${record.date}</span>
-          <span class="record-value">${record.weight} lbs × ${record.reps}</span>
+          <span class="record-value">${record.weight} kg × ${record.reps}</span>
         </div>
       `).join('');
     }

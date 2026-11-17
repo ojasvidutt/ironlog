@@ -153,7 +153,7 @@
 
 **Features**
 - Personal records list for every exercise with a saved set
-- Each record is based on the highest weight lifted and shows the workout date, weight, and reps
+- Each record is based on the highest weight lifted and shows the workout date, weight in kg, and reps
 
 **Data Flow**
 - Personal records are derived from saved workout exercise sets; no duplicate record data is stored
