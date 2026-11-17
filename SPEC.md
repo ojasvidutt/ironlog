@@ -52,7 +52,7 @@
 - Minimal, takes ~60px height
 
 **Navigation**
-- Tab-based navigation: [EXERCISES] [WORKOUT] [BODYWEIGHT] [HISTORY]
+- Tab-based navigation: [EXERCISES] [WORKOUT] [BODYWEIGHT] [RECORDS] [HISTORY]
 - Active tab: amber background with black text
 - Inactive tabs: transparent with amber text
 - Simple underline indicator
@@ -116,7 +116,7 @@
 
 **Features**
 - Date picker (defaults to today)
-- Exercise selector dropdown (populated from exercise library)
+- Search bar filters and selects exercises from the exercise library
 - Add exercise to workout:
   - Select exercise
   - Enter sets (number)
@@ -126,12 +126,13 @@
 - Display current workout with all added exercises
 - Each exercise shows: name, sets × reps, rest: Xs, notes
 - Remove exercise from workout (X button)
-- Save workout button
-- Clear workout button
+- Exercise additions, edits, removals, and date changes autosave to Supabase
+- Today's workout resumes automatically after a reload
+- Clear workout removes the saved workout after confirmation
 
 **Data Flow**
-- Workout stored in local state until saved
-- On save: POST to `/workouts` table, then POST each exercise to `/workout_exercises`
+- Adding the first exercise creates the workout in Supabase and subsequent changes autosave
+- Workout exercise changes replace the workout's exercise rows in Supabase
 - Workout exercises link to exercises table
 
 ### 3. Bodyweight Tracking (Bodyweight Tab)
@@ -148,18 +149,25 @@
 - DELETE from `/bodyweight_logs` table
 - GET with order by date desc, limit 30
 
-### 4. History (History Tab)
+### 4. Records (Records Tab)
 
 **Features**
 - Personal records list for every exercise with a saved set
-- Each record is based on the highest weight lifted, and shows the workout date, weight, and reps from that set
-- List past workouts by date (newest first)
-- Each entry shows: date, number of exercises, expandable details
-- Click to expand and see exercise details (sets, reps, rest)
-- Delete workout option
+- Each record is based on the highest weight lifted and shows the workout date, weight, and reps
 
 **Data Flow**
 - Personal records are derived from saved workout exercise sets; no duplicate record data is stored
+
+### 5. History (History Tab)
+
+**Features**
+- List past workouts by date (newest first)
+- Each entry shows: date, number of exercises, expandable details
+- Click to expand and see exercise details (sets, reps, rest)
+- Edit workout option loads the workout into the active workout editor and autosaves changes
+- Delete workout option
+
+**Data Flow**
 - GET from `/workouts` with join to `/workout_exercises` and `/exercises`
 - DELETE from `/workouts` (cascades to workout_exercises)
 

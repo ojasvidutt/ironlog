@@ -98,6 +98,22 @@
       border-bottom-color: var(--text-primary);
     }
 
+      .autosave-status {
+        min-height: 18px;
+        margin-top: 8px;
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        text-align: right;
+      }
+
+      .autosave-status.saved {
+        color: var(--accent);
+      }
+
+      .autosave-status.error {
+        color: var(--danger);
+      }
+
     /* Main Content */
     .main {
       max-width: 600px;
@@ -464,6 +480,54 @@
       width: 100px;
     }
 
+    .exercise-search {
+      position: relative;
+      flex: 1;
+    }
+
+    .exercise-search input {
+      width: 100%;
+    }
+
+    .exercise-search-results {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 180px;
+      overflow-y: auto;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      z-index: 20;
+    }
+
+    .exercise-search-results:empty {
+      display: none;
+    }
+
+    .exercise-search-result {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text-primary);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .exercise-search-result:last-child {
+      border-bottom: none;
+    }
+
+    .exercise-search-result:hover,
+    .exercise-search-result.selected {
+      background: var(--text-primary);
+      color: var(--bg);
+    }
+
     /* Responsive */
     @media (max-width: 480px) {
       .main {
@@ -491,11 +555,11 @@
         flex: 1 1 100%;
       }
 
-      #workoutExerciseSelect {
+      #workoutExerciseSearch {
         flex: 1 1 calc(100% - 48px);
       }
 
-      #workoutExerciseSelect + .btn {
+      .exercise-search + .btn {
         flex: 0 0 40px;
         padding-left: 8px;
         padding-right: 8px;
@@ -626,6 +690,7 @@
     <button class="nav-tab active" data-tab="exercises">Exercises</button>
     <button class="nav-tab" data-tab="workout">Workout</button>
     <button class="nav-tab" data-tab="bodyweight">Bodyweight</button>
+    <button class="nav-tab" data-tab="records">Records</button>
     <button class="nav-tab" data-tab="history">History</button>
   </nav>
 
@@ -650,13 +715,24 @@
       <div class="card">
         <div class="card-header">Workout Date</div>
         <input type="date" id="workoutDate">
+        <div class="autosave-status" id="autosaveStatus">Ready</div>
       </div>
       <div class="card">
         <div class="card-header">Add Exercise</div>
         <div class="form-row">
-          <select id="workoutExerciseSelect">
-            <option value="">Select exercise...</option>
-          </select>
+          <div class="exercise-search">
+            <input
+              type="search"
+              id="workoutExerciseSearch"
+              placeholder="Search exercises..."
+              autocomplete="off"
+              oninput="renderExerciseSearchResults()"
+              onfocus="renderExerciseSearchResults()"
+              onkeydown="handleExerciseSearchKeydown(event)"
+            >
+            <input type="hidden" id="workoutExerciseId">
+            <div class="exercise-search-results" id="exerciseSearchResults"></div>
+          </div>
           <button class="btn" onclick="showAddWorkoutForm()">+</button>
         </div>
         <div id="workoutForm" style="display: none; margin-top: 12px;">
@@ -684,8 +760,7 @@
         </div>
       </div>
       <div class="form-row">
-        <button class="btn btn-primary" onclick="saveWorkout()">Save Workout</button>
-        <button class="btn btn-danger" onclick="clearWorkout()">Clear</button>
+        <button class="btn btn-danger" onclick="clearWorkout()">Clear Workout</button>
       </div>
     </section>
 
@@ -711,14 +786,18 @@
       </div>
     </section>
 
-    <!-- History Section -->
-    <section class="section" id="history">
+    <!-- Records Section -->
+    <section class="section" id="records">
       <div class="card">
         <div class="card-header">Personal Records // Highest Weight</div>
         <div class="list" id="personalRecordsList">
           <div class="empty">No records yet. Save a workout to start tracking.</div>
         </div>
       </div>
+    </section>
+
+    <!-- History Section -->
+    <section class="section" id="history">
       <div id="historyList">
         <div class="empty">No workouts recorded yet.</div>
       </div>
@@ -738,7 +817,11 @@
     let exercises = [];
     let currentWorkout = [];
     let bodyweightLogs = [];
+    let historyWorkouts = [];
     let currentUser = null;
+    let activeWorkoutId = null;
+    let editingWorkoutExerciseIndex = null;
+    let autosaveQueue = Promise.resolve();
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
@@ -819,7 +902,8 @@
       
       // Load data after auth
       loadData();
-      document.getElementById('workoutDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('workoutDate').value = getLocalDate();
+      document.getElementById('workoutDate').addEventListener('change', updateActiveWorkoutDate);
     }
 
     function showAuthError(message) {
@@ -909,7 +993,8 @@
       await loadExercises();
       await Promise.all([
         loadBodyweightLogs(),
-        loadHistory()
+        loadHistory(),
+        loadTodaysWorkout()
       ]);
     }
 
@@ -967,16 +1052,57 @@
     }
 
     function updateExerciseSelect() {
-      const select = document.getElementById('workoutExerciseSelect');
-      select.innerHTML = '<option value="">Select exercise...</option>' + 
-        exercises.map(ex => `<option value="${ex.id}">${escapeHtml(ex.name)}</option>`).join('');
+      renderExerciseSearchResults();
+    }
+
+    function renderExerciseSearchResults() {
+      const search = document.getElementById('workoutExerciseSearch');
+      const results = document.getElementById('exerciseSearchResults');
+      if (!search) return;
+
+      document.getElementById('workoutExerciseId').value = '';
+      const query = search.value.trim().toLowerCase();
+      if (!query && document.activeElement !== search) {
+        results.innerHTML = '';
+        return;
+      }
+      const matches = exercises
+        .filter(ex => ex.name.toLowerCase().includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      results.innerHTML = matches.map(ex => `
+        <button
+          type="button"
+          class="exercise-search-result"
+          onclick="selectWorkoutExercise(${ex.id})"
+        >${escapeHtml(ex.name)}</button>
+      `).join('');
+    }
+
+    function selectWorkoutExercise(id) {
+      const exercise = exercises.find(ex => ex.id === id);
+      if (!exercise) return;
+      document.getElementById('workoutExerciseId').value = String(id);
+      document.getElementById('workoutExerciseSearch').value = exercise.name;
+      document.getElementById('exerciseSearchResults').innerHTML = '';
+    }
+
+    function handleExerciseSearchKeydown(event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const search = document.getElementById('workoutExerciseSearch');
+      const query = search.value.trim().toLowerCase();
+      const match = exercises
+        .filter(ex => ex.name.toLowerCase().includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name))[0];
+      if (match) selectWorkoutExercise(match.id);
     }
 
     // Workout
     function showAddWorkoutForm() {
-      const select = document.getElementById('workoutExerciseSelect');
-      if (!select.value) {
-        alert('Please select an exercise first');
+      const exerciseId = document.getElementById('workoutExerciseId').value;
+      if (!exerciseId) {
+        alert('Please search for and select an exercise first');
         return;
       }
       document.getElementById('workoutForm').style.display = 'block';
@@ -988,6 +1114,11 @@
       document.getElementById('setRows').innerHTML = '';
       document.getElementById('workoutRest').value = '';
       document.getElementById('workoutNotes').value = '';
+      editingWorkoutExerciseIndex = null;
+      document.getElementById('workoutExerciseId').value = '';
+      document.getElementById('workoutExerciseSearch').value = '';
+      document.getElementById('workoutExerciseSearch').disabled = false;
+      document.getElementById('exerciseSearchResults').innerHTML = '';
     }
 
     function addSetRow(weight = '', reps = '') {
@@ -1012,8 +1143,7 @@
     }
 
     function addToWorkout() {
-      const select = document.getElementById('workoutExerciseSelect');
-      const exerciseId = parseInt(select.value);
+      const exerciseId = parseInt(document.getElementById('workoutExerciseId').value);
       const exercise = exercises.find(e => e.id === exerciseId);
       
       if (!exercise) return;
@@ -1030,17 +1160,30 @@
         return;
       }
       
-      currentWorkout.push({
-        exerciseId,
-        name: exercise.name,
-        sets,
-        rest,
-        notes
-      });
+      const workoutExercise = { exerciseId, name: exercise.name, sets, rest, notes };
+      if (editingWorkoutExerciseIndex !== null) {
+        currentWorkout[editingWorkoutExerciseIndex] = workoutExercise;
+      } else {
+        currentWorkout.push(workoutExercise);
+      }
       
       hideWorkoutForm();
-      select.value = '';
       renderCurrentWorkout();
+      queueAutosave();
+    }
+
+    function editWorkoutExercise(idx) {
+      const workoutExercise = currentWorkout[idx];
+      editingWorkoutExerciseIndex = idx;
+      const search = document.getElementById('workoutExerciseSearch');
+      search.value = workoutExercise.name;
+      search.disabled = true;
+      document.getElementById('workoutExerciseId').value = String(workoutExercise.exerciseId);
+      document.getElementById('workoutRest').value = workoutExercise.rest;
+      document.getElementById('workoutNotes').value = workoutExercise.notes;
+      document.getElementById('setRows').innerHTML = '';
+      workoutExercise.sets.forEach(set => addSetRow(set.weight, set.reps));
+      document.getElementById('workoutForm').style.display = 'block';
     }
 
     function renderCurrentWorkout() {
@@ -1055,7 +1198,10 @@
         <div class="workout-exercise">
           <div class="workout-exercise-header">
             <span class="workout-exercise-name">${escapeHtml(we.name)}</span>
-            <button class="btn btn-danger btn-small" onclick="removeFromWorkout(${idx})">×</button>
+            <div class="list-item-actions">
+              <button class="btn btn-small" onclick="editWorkoutExercise(${idx})">Edit</button>
+              <button class="btn btn-danger btn-small" onclick="removeFromWorkout(${idx})">×</button>
+            </div>
           </div>
           <div class="workout-exercise-stats">
             ${we.sets.map((set, setIdx) => `<span>Set ${setIdx + 1}: ${set.weight} × ${set.reps}</span>`).join('')}
@@ -1069,56 +1215,145 @@
     function removeFromWorkout(idx) {
       currentWorkout.splice(idx, 1);
       renderCurrentWorkout();
+      queueAutosave();
     }
 
-    function clearWorkout() {
-      if (!confirm('Clear current workout?')) return;
+    async function clearWorkout() {
+      if (!confirm('Clear this workout and remove it from the cloud?')) return;
       currentWorkout = [];
+      hideWorkoutForm();
       renderCurrentWorkout();
+
+      if (activeWorkoutId) {
+        const workoutId = activeWorkoutId;
+        activeWorkoutId = null;
+        setAutosaveStatus('Clearing...', '');
+        await supabaseClient.from('workout_exercises').delete().eq('workout_id', workoutId);
+        const { error } = await supabaseClient
+          .from('workouts')
+          .delete()
+          .eq('id', workoutId)
+          .eq('user_id', currentUser.id);
+        if (error) {
+          setAutosaveStatus('Clear failed: ' + error.message, 'error');
+          return;
+        }
+      }
+
+      setAutosaveStatus('Cleared', 'saved');
+      await loadHistory();
     }
 
-    async function saveWorkout() {
-      if (currentWorkout.length === 0) {
-        alert('No exercises to save');
+    function setAutosaveStatus(message, state = '') {
+      const status = document.getElementById('autosaveStatus');
+      status.textContent = message;
+      status.className = 'autosave-status' + (state ? ' ' + state : '');
+    }
+
+    function queueAutosave() {
+      setAutosaveStatus('Saving...', '');
+      autosaveQueue = autosaveQueue.then(() => syncActiveWorkout());
+      return autosaveQueue;
+    }
+
+    async function ensureActiveWorkout() {
+      if (activeWorkoutId) return activeWorkoutId;
+      const date = document.getElementById('workoutDate').value || getLocalDate();
+      const { data, error } = await supabaseClient
+        .from('workouts')
+        .insert([{ date, notes: '', user_id: currentUser.id }])
+        .select();
+      if (error) throw error;
+      activeWorkoutId = data[0].id;
+      return activeWorkoutId;
+    }
+
+    async function syncActiveWorkout() {
+      if (!currentUser) return;
+      if (currentWorkout.length === 0 && !activeWorkoutId) {
+        setAutosaveStatus('Ready', '');
         return;
       }
-      
-      const date = document.getElementById('workoutDate').value;
-      const notes = '';
-      
+
       try {
-        // Create workout
-        const { data: workoutData, error: workoutError } = await supabaseClient
-          .from('workouts')
-          .insert([{ date, notes, user_id: currentUser.id }])
-          .select();
-        
-        if (workoutError) throw workoutError;
-        const workoutId = workoutData[0]?.id;
-        
-        // Add exercises
-        for (const we of currentWorkout) {
-          const { error: weError } = await supabaseClient
+        const workoutId = await ensureActiveWorkout();
+        const { error: deleteError } = await supabaseClient
+          .from('workout_exercises')
+          .delete()
+          .eq('workout_id', workoutId);
+        if (deleteError) throw deleteError;
+
+        if (currentWorkout.length > 0) {
+          const rows = currentWorkout.map(we => ({
+            workout_id: workoutId,
+            exercise_id: we.exerciseId,
+            sets: we.sets.length,
+            reps: we.sets[0].reps,
+            sets_data: we.sets,
+            rest_seconds: we.rest,
+            notes: we.notes
+          }));
+          const { error } = await supabaseClient
             .from('workout_exercises')
-            .insert([{
-              workout_id: workoutId,
-              exercise_id: we.exerciseId,
-              sets: we.sets.length,
-              reps: we.sets[0].reps,
-              sets_data: we.sets,
-              rest_seconds: we.rest,
-              notes: we.notes
-            }]);
-          
-          if (weError) throw weError;
+            .insert(rows);
+          if (error) throw error;
         }
-        
-        alert('Workout saved!');
-        currentWorkout = [];
-        renderCurrentWorkout();
+
+        setAutosaveStatus('Autosaved', 'saved');
         await loadHistory();
-      } catch (e) {
-        alert('Failed to save workout: ' + e.message);
+      } catch (error) {
+        setAutosaveStatus('Autosave failed: ' + error.message, 'error');
+      }
+    }
+
+    async function updateActiveWorkoutDate() {
+      const date = document.getElementById('workoutDate').value;
+      if (!date || !activeWorkoutId) return;
+      setAutosaveStatus('Saving date...', '');
+      const { error } = await supabaseClient
+        .from('workouts')
+        .update({ date })
+        .eq('id', activeWorkoutId)
+        .eq('user_id', currentUser.id);
+      setAutosaveStatus(error ? 'Date save failed: ' + error.message : 'Date saved', error ? 'error' : 'saved');
+      if (!error) await loadHistory();
+    }
+
+    async function loadTodaysWorkout() {
+      try {
+        const today = getLocalDate();
+        const { data: workouts, error } = await supabaseClient
+          .from('workouts')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .eq('date', today)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (error) throw error;
+        const workout = workouts?.[0];
+        if (!workout) return;
+
+        const { data: workoutExercises, error: exerciseError } = await supabaseClient
+          .from('workout_exercises')
+          .select('*')
+          .eq('workout_id', workout.id);
+        if (exerciseError) throw exerciseError;
+        if (!workoutExercises?.length) return;
+
+        activeWorkoutId = workout.id;
+        currentWorkout = workoutExercises.map(we => ({
+          exerciseId: we.exercise_id,
+          name: exercises.find(ex => ex.id === we.exercise_id)?.name || 'Unknown',
+          sets: Array.isArray(we.sets_data) && we.sets_data.length
+            ? we.sets_data
+            : [{ weight: we.weight ?? 0, reps: we.reps }],
+          rest: we.rest_seconds || 0,
+          notes: we.notes || ''
+        }));
+        renderCurrentWorkout();
+        setAutosaveStatus('Resumed', 'saved');
+      } catch (error) {
+        console.error('Failed to resume workout:', error);
       }
     }
 
@@ -1250,6 +1485,7 @@
         }
         
         const loadedWorkouts = workouts || [];
+        historyWorkouts = loadedWorkouts;
         renderPersonalRecords(loadedWorkouts);
         renderHistory(loadedWorkouts);
       } catch (e) {
@@ -1320,10 +1556,35 @@
                 ${e.notes ? `<div class="workout-exercise-notes">${escapeHtml(e.notes)}</div>` : ''}
               </div>
             `).join('')}
-            <button class="btn btn-danger btn-small" style="margin-top: 12px;" onclick="deleteWorkout(${w.id})">Delete Workout</button>
+            <div class="list-item-actions" style="margin-top: 12px;">
+              <button class="btn btn-small" onclick="editWorkout(${w.id})">Edit Workout</button>
+              <button class="btn btn-danger btn-small" onclick="deleteWorkout(${w.id})">Delete Workout</button>
+            </div>
           </div>
         </div>
       `).join('');
+    }
+
+    function editWorkout(id) {
+      const workout = historyWorkouts.find(w => w.id === id);
+      if (!workout) return;
+
+      activeWorkoutId = workout.id;
+      currentWorkout = workout.exercises.map(we => ({
+        exerciseId: we.exercise_id,
+        name: we.exerciseName,
+        sets: we.sets,
+        rest: we.rest_seconds || 0,
+        notes: we.notes || ''
+      }));
+      document.getElementById('workoutDate').value = workout.date;
+      renderCurrentWorkout();
+      setAutosaveStatus('Editing saved workout', 'saved');
+
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.querySelector('[data-tab="workout"]').classList.add('active');
+      document.getElementById('workout').classList.add('active');
     }
 
     function toggleHistory(id) {
@@ -1351,6 +1612,12 @@
           .eq('user_id', currentUser.id);
         
         if (error) throw error;
+        if (activeWorkoutId === id) {
+          activeWorkoutId = null;
+          currentWorkout = [];
+          renderCurrentWorkout();
+          setAutosaveStatus('Ready', '');
+        }
         await loadHistory();
       } catch (e) {
         alert('Failed to delete workout: ' + e.message);
@@ -1358,6 +1625,12 @@
     }
 
     // Utilities
+    function getLocalDate() {
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - offset).toISOString().split('T')[0];
+    }
+
     function escapeHtml(text) {
       if (typeof text !== 'string') return text;
       const div = document.createElement('div');
